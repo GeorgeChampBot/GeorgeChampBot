@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlparse
 import isodate
 import discord
 import random
+import shlex
 from math import ceil
 
 _DISCONNECT_TASK = None
@@ -52,6 +53,21 @@ YDL_OPTIONS = {
 }
 
 FFMPEG_OPTIONS = {"before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5", "options": "-vn"}
+
+
+def ffmpeg_options(http_headers):
+    """FFMPEG_OPTIONS plus the HTTP headers yt-dlp resolved the stream url with.
+
+    YouTube can tie a stream url to the client that requested it (User-Agent etc.) and
+    answer a request with different headers with a 403. ffmpeg takes them as a single
+    CRLF-separated -headers value; discord.py shlex-splits before_options, hence the quoting.
+    """
+    if not http_headers:
+        return FFMPEG_OPTIONS
+    headers = "".join(f"{key}: {value}\r\n" for key, value in http_headers.items())
+    return {**FFMPEG_OPTIONS, "before_options": f"{FFMPEG_OPTIONS['before_options']} -headers {shlex.quote(headers)}"}
+
+
 MAX_SONGS = 1500
 LOOPDISABLED = "LOOPDISABLED"
 LOOPQUEUE = "LOOPQUEUE"
@@ -67,6 +83,7 @@ class SongItem:
     def __init__(self, entry, requester):
         self.yt_url = f'https://www.youtube.com/watch?v={entry["id"]}'
         self.song_url = None
+        self.http_headers = {}  # headers yt-dlp resolved song_url with; ffmpeg must send the same ones
         self.title = entry["snippet"]["title"]
         self.channel_title = entry["snippet"]["channelTitle"]
         self.requester = requester
@@ -165,7 +182,7 @@ async def play_song(playback_error=None):
         sq.curr_song.start_time = datetime.now()
         loop = asyncio.get_running_loop()
         vc.play(
-            FFmpegPCMAudio(sq.curr_song.song_url, **FFMPEG_OPTIONS),
+            FFmpegPCMAudio(sq.curr_song.song_url, **ffmpeg_options(sq.curr_song.http_headers)),
             after=lambda error: _schedule_next_song(loop, error),
         )
         embed = build_now_playing_embed()
@@ -197,16 +214,15 @@ async def process_song(sq):
         sq.queue.popleft()
         return False
 
-    for format in info["formats"]:
-        if format["ext"] != "mhtml":
-            break
-
-    if format["ext"] == "mhtml":
+    # extract_info has already applied YDL_OPTIONS["format"] (bestaudio/best): the chosen format's
+    # url and http_headers are at the top level. info["formats"] is every format, sorted worst first.
+    if not info.get("url"):
         await ut.botChannel.send(f"Skipped {next_song.title} ({next_song.yt_url}). Video url couldn't be found")
         sq.queue.popleft()
         return False
 
-    next_song.song_url = format["url"]
+    next_song.song_url = info["url"]
+    next_song.http_headers = info.get("http_headers") or {}
     return True
 
 

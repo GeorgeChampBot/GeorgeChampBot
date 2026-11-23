@@ -5,7 +5,10 @@ davey>=0.1.5
 python-dotenv>=0.21.0
 emoji>=1.7.0
 aiogoogle>=5.0
-yt-dlp>=2026.1.1
 PyNaCl>=1.5.0
 isodate>=0.6.1
 pytz>=2024.1
+
+# yt-dlp is intentionally NOT listed here: YouTube breaks old releases every few weeks, so a pinned
+# version eventually stops playing. The Dockerfile installs it unpinned, and docker-entrypoint.sh
+# upgrades it on every container start.
