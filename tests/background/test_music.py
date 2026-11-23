@@ -309,9 +309,42 @@ async def test_music_play_skips_unavailable_song(tree, guild, music_member, fake
 
 
 async def test_music_play_skips_song_without_playable_format(tree, guild, music_member, fake_vc, monkeypatch):
-    """A song with no playable format is dropped with a 'url couldn't be found' notice (process_song)."""
+    """A song yt-dlp resolves without a stream url is dropped with a 'url couldn't be found' notice (process_song)."""
     bot_capture = patch_bot_channel(monkeypatch)
     stub_youtube(monkeypatch, search_video_id="abc123", ytdl_info={"formats": [{"ext": "mhtml", "url": "x"}]})
     await invoke_slash(tree, "music play", music_member, guild, options={"query": "My Song"})
     await asyncio.gather(*musicPlayer._PENDING_TASKS)
     assert any("couldn't be found" in m.content for m in bot_capture.messages)
+    fake_vc.play.assert_not_called()
+
+
+async def test_music_play_streams_selected_format_with_its_headers(tree, guild, music_member, fake_vc, monkeypatch):
+    """ffmpeg gets the format yt-dlp selected (not the first, i.e. worst, entry of `formats`) and the
+    HTTP headers yt-dlp resolved it with. Regression: the bot streamed the worst format with ffmpeg's
+    default headers, and YouTube answered with a 403."""
+    patch_bot_channel(monkeypatch)
+    headers = {"User-Agent": "com.example.client/1.0 (Linux; U; Android 12)", "Accept-Language": "en-us,en;q=0.5"}
+    ytdl_info = {
+        "url": "https://stream.example/best.webm",
+        "http_headers": headers,
+        "formats": [
+            {"ext": "mhtml", "url": "https://stream.example/storyboard.mhtml"},
+            {"ext": "m4a", "url": "https://stream.example/worst.m4a"},
+            {"ext": "webm", "url": "https://stream.example/best.webm"},
+        ],
+    }
+    stub_youtube(monkeypatch, search_video_id="abc123", ytdl_info=ytdl_info)
+    await invoke_slash(tree, "music play", music_member, guild, options={"query": "My Song"})
+    await asyncio.gather(*musicPlayer._PENDING_TASKS)
+
+    source = fake_vc.play.call_args.args[0]
+    args = source._process.args  # the ffmpeg argv discord.py spawned
+    try:
+        assert args[args.index("-i") + 1] == "https://stream.example/best.webm"
+        headers_at = args.index("-headers")
+        assert headers_at < args.index("-i")  # an input option: must precede -i
+        assert args[headers_at + 1] == (
+            "User-Agent: com.example.client/1.0 (Linux; U; Android 12)\r\nAccept-Language: en-us,en;q=0.5\r\n"
+        )
+    finally:
+        source.cleanup()

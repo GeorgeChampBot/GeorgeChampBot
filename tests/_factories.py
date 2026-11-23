@@ -68,6 +68,7 @@ def make_song_item(title: str = "Song A", duration: int = 180):
     song = SongItem.__new__(SongItem)
     song.yt_url = "https://www.youtube.com/watch?v=test"
     song.song_url = "https://stream.example/test.mp3"
+    song.http_headers = {}
     song.title = title
     song.channel_title = "Test Channel"
     song.requester = "alice"

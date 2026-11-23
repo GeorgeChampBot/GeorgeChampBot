@@ -70,13 +70,21 @@ python3 GeorgeChampBot.py
 
 **1. Music Player is no Longer Working** 
 
-`yt-dlp` is known to break as Google changes things. It's a cat and mouse situation. You will need to [update dependencies](docs/DEVELOPMENT.md#update-dependencies) so that the mouse can outmaneuver the cat. 
+`yt-dlp` is known to break as Google changes things. It's a cat and mouse situation. Symptom: the bot posts "Now Playing" but stays silent, and the container log shows `HTTP error 403 Forbidden`.
 
-Use the following command to figure out the latest `yt-dlp` package version.
+`yt-dlp` is not pinned in `requirements.txt`; the container upgrades it to the latest release every time it starts (`docker-entrypoint.sh`). So the fix is usually just a restart:
 
 ```
-pip index versions yt-dlp
+docker restart george_champ_bot_instance
 ```
+
+To stay ahead of breakages without anyone noticing first, restart it weekly from the host's root crontab (`sudo crontab -e`), e.g. Mondays at 11:00 UTC:
+
+```
+0 11 * * 1 docker restart george_champ_bot_instance
+```
+
+The container is started with `--restart unless-stopped` (see `run.sh`), so it also comes back on its own after a crash or a VM reboot.
 
 ## Authors
 

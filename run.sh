@@ -42,9 +42,11 @@ docker image build . --tag $IMAGE_NAME
 
 # database directory is bound to the docker container
 # This makes the database info persistent
+# --restart brings the bot back after a crash or a VM reboot (until it is explicitly stopped)
 docker container run \
     --name $CONTAINER_NAME \
     -d \
+    --restart unless-stopped \
     --mount type=bind,source="$(pwd)"/database,target=/database \
     "$IMAGE_NAME"
 

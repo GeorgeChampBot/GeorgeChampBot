@@ -136,6 +136,10 @@ pip install pip-tools
 pip-compile --upgrade requirements.in
 ```
 
+Compile with Python 3.12 (the version in the Docker image), e.g. inside `python:3.12-slim`.
+
+`yt-dlp` is the exception: it is deliberately left out of `requirements.in`. The Dockerfile installs the latest release, and `docker-entrypoint.sh` upgrades it again on every container start, because YouTube breaks old releases every few weeks.
+
 ## Built With
 
 * [discord.py](https://discordpy.readthedocs.io/en/latest/) - Discord API wrapper

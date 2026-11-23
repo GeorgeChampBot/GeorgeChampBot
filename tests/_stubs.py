@@ -246,6 +246,7 @@ def stub_youtube(
         def extract_info(self, url, download=False):
             if ytdl_unavailable:
                 return None
-            return ytdl_info or {"formats": [{"ext": "mp3", "url": "https://stream.example/test.mp3"}]}
+            # Shape of extract_info(download=False): the selected format's fields are at the top level
+            return ytdl_info or {"url": "https://stream.example/test.mp3", "http_headers": {}}
 
     monkeypatch.setattr(musicPlayer, "YoutubeDL", _FakeYDL)
